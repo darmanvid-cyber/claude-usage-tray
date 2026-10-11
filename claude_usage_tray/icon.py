@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from PIL import Image, ImageDraw, ImageFont
 
+from . import kenji
 from .status import COLORS, RED, Status
 
 _SIZE = 256          # draw large and let pystray shrink it = sharper
@@ -92,8 +93,13 @@ def _draw_center_number(img: Image.Image, remaining: float, color: tuple[int, in
     d.text((cx - tw / 2 - bb[0], cy - th / 2 - bb[1]), txt, font=font, fill=color + (255,))
 
 
-def render(status: Status, cfg: dict, dim: bool = False) -> Image.Image:
+def render(status: Status, cfg: dict, dim: bool = False, tick: int = 0, working: bool = False) -> Image.Image:
     """Build the icon image from the status. dim=True is used when blinking (faded frame)."""
+    if cfg.get("icon_style", "kenji") == "kenji":
+        try:
+            return kenji.render(status, tick, working, dim)
+        except Exception:  # noqa: BLE001 — sprite missing/corrupt -> classic icon
+            pass
     color = COLORS[status.color]
     img = Image.new("RGBA", (_SIZE, _SIZE), _BG)
     d = ImageDraw.Draw(img)
@@ -116,4 +122,6 @@ def render(status: Status, cfg: dict, dim: bool = False) -> Image.Image:
 
 
 def should_blink(status: Status, cfg: dict) -> bool:
+    if cfg.get("icon_style", "kenji") == "kenji":
+        return False  # Kenji bows instead of blinking
     return bool(cfg.get("blink_when_red")) and status.color == RED

@@ -33,6 +33,8 @@ DEFAULTS: dict[str, Any] = {
     # Which quotas count when choosing the colour (the worst one = least remaining)
     #   five_hour = 5-hour window, seven_day = weekly cap
     "watch": ["five_hour", "seven_day"],
+    # tray icon: "kenji" (animated pixel-art dog) or "classic" (Claude spark + ring)
+    "icon_style": "kenji",
     # floating widget (light theme)
     "widget_opacity": 0.94,     # opacity 0.5–1.0
     "widget_on_start": False,   # open the widget automatically at startup

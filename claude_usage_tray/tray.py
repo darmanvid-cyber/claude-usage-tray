@@ -11,6 +11,7 @@ from typing import Any
 import pystray
 
 from . import autostart, config, icon as icon_mod, ui
+from . import kenji
 from .api import fetch_usage, read_access_token
 from .status import RED, Status, evaluate, humanize_reset
 
@@ -23,6 +24,7 @@ class TrayApp:
         self._stop = threading.Event()
         self._wake = threading.Event()   # wake up to poll immediately (Refresh)
         self._blink_on = False
+        self._tick = 0
 
         self.icon = pystray.Icon(
             "claude_usage_tray",
@@ -39,6 +41,11 @@ class TrayApp:
             pystray.MenuItem("Refresh now", self._on_refresh),
             pystray.MenuItem("Show details…", self._on_details, default=True),
             pystray.MenuItem("Floating widget", self._on_widget),
+            pystray.MenuItem(
+                "Kenji icon",
+                self._on_toggle_kenji,
+                checked=lambda _: self.cfg.get("icon_style", "kenji") == "kenji",
+            ),
             pystray.MenuItem("Connect Claude account…", self._on_connect),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(
@@ -134,6 +141,11 @@ class TrayApp:
     def _on_toggle_autostart(self, *_):
         autostart.toggle()
 
+    def _on_toggle_kenji(self, *_):
+        self.cfg["icon_style"] = "classic" if self.cfg.get("icon_style", "kenji") == "kenji" else "kenji"
+        config.save(self.cfg)
+        self._apply_icon()
+
     def _on_toggle_notify(self, *_):
         self.cfg["notify"] = not self.cfg.get("notify", True)
         config.save(self.cfg)
@@ -163,7 +175,7 @@ class TrayApp:
         self._maybe_notify(prev, new)
 
     def _apply_icon(self) -> None:
-        self.icon.icon = icon_mod.render(self.status, self.cfg)
+        self.icon.icon = icon_mod.render(self.status, self.cfg, tick=self._tick, working=kenji.is_working())
         self.icon.title = self._tooltip()
         self._last_color = self.status.color
 
@@ -207,6 +219,14 @@ class TrayApp:
 
     def _blink_loop(self) -> None:
         while not self._stop.is_set():
+            if self.cfg.get("icon_style", "kenji") == "kenji":
+                self._tick += 1
+                try:
+                    self._apply_icon()
+                except Exception:  # noqa: BLE001
+                    pass
+                self._stop.wait(0.5)
+                continue
             if icon_mod.should_blink(self.status, self.cfg):
                 self._blink_on = not self._blink_on
                 try:
