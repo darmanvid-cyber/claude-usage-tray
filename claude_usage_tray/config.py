@@ -35,6 +35,8 @@ DEFAULTS: dict[str, Any] = {
     "watch": ["five_hour", "seven_day"],
     # tray icon: "kenji" (animated pixel-art dog) or "classic" (Claude spark + ring)
     "icon_style": "kenji",
+    # Kenji coat: "beagle" (lemon beagle) or "golden"
+    "kenji_coat": "beagle",
     # floating widget (light theme)
     "widget_opacity": 0.94,     # opacity 0.5–1.0
     "widget_on_start": False,   # open the widget automatically at startup

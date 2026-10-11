@@ -14,6 +14,7 @@ from pathlib import Path
 
 from PIL import Image
 
+from . import config
 from .status import COLORS, RED, Status
 
 _SIZE = 256
@@ -29,9 +30,18 @@ def _sprite_path() -> Path:
     return base / "assets" / "kenji-sprite.json"
 
 
+# Coat colour overrides on top of the sprite palette (G=main fur, D=shade/ears, L=light, M=mid)
+COATS: dict[str, dict[str, list[int]]] = {
+    "golden": {},
+    "beagle": {"G": [238, 206, 120], "D": [190, 140, 64], "L": [255, 248, 232], "M": [248, 232, 190]},
+}
+
+
 @lru_cache(maxsize=1)
 def _data() -> dict:
-    return json.loads(_sprite_path().read_text(encoding="utf-8"))
+    d = json.loads(_sprite_path().read_text(encoding="utf-8"))
+    d["palette"].update(COATS.get(config.load().get("kenji_coat", "beagle"), {}))
+    return d
 
 
 def _hex(c: list[int]) -> tuple[int, int, int, int]:
