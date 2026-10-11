@@ -25,6 +25,7 @@ class TrayApp:
         self._wake = threading.Event()   # wake up to poll immediately (Refresh)
         self._blink_on = False
         self._tick = 0
+        self._retry_after = 0
 
         self.icon = pystray.Icon(
             "claude_usage_tray",
@@ -163,12 +164,14 @@ class TrayApp:
     def _poll_loop(self) -> None:
         while not self._stop.is_set():
             self._refresh_once()
-            # wait until the next cycle, or until woken (Refresh/Quit)
-            self._wake.wait(timeout=self.cfg["poll_seconds"])
+            # wait until the next cycle (or the server's Retry-After), or until woken (Refresh/Quit)
+            self._wake.wait(timeout=max(self.cfg["poll_seconds"], self._retry_after + 5))
             self._wake.clear()
 
     def _refresh_once(self) -> None:
-        new = evaluate(fetch_usage(), self.cfg)
+        usage = fetch_usage()
+        self._retry_after = int(usage.get("retry_after") or 0)
+        new = evaluate(usage, self.cfg)
         prev = self.status
         self.status = new
         self._apply_icon()

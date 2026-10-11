@@ -119,7 +119,12 @@ def fetch_usage() -> dict[str, Any]:
         if code == 401:
             return {"error": "auth", "message": "Token expired — reopen Claude Code"}
         if code == 429:
-            return {"error": "rate_limited", "message": "Rate limited (polling too often)"}
+            try:
+                wait = int(e.response.headers.get("Retry-After", 0))
+            except (TypeError, ValueError):
+                wait = 0
+            msg = f"Rate limited, retrying in {max(1, round(wait / 60))} min" if wait else "Rate limited (polling too often)"
+            return {"error": "rate_limited", "message": msg, "retry_after": wait}
         return {"error": "http", "message": f"HTTP {code or '?'}"}
     except Exception as e:  # noqa: BLE001
         return {"error": "unknown", "message": str(e)[:80]}
