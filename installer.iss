@@ -1,7 +1,7 @@
-; Inno Setup script — สร้าง installer wizard สำหรับ Claude Usage Tray
-; ต้องมี Inno Setup (https://jrsoftware.org/isdl.php) แล้วคอมไพล์ด้วย:
+; Inno Setup script — builds the installer wizard for Claude Usage Tray
+; Requires Inno Setup (https://jrsoftware.org/isdl.php); compile with:
 ;     "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
-; ผลลัพธ์: dist_installer\ClaudeUsageTray-Setup.exe
+; Output: dist_installer\ClaudeUsageTray-Setup.exe
 
 #define MyAppName "Claude Usage Tray"
 #define MyAppVersion "0.1.0"
@@ -16,7 +16,7 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\Claude Usage Tray
 DefaultGroupName=Claude Usage Tray
 DisableProgramGroupPage=yes
-; ติดตั้งระดับผู้ใช้ ไม่ต้องสิทธิ์ admin
+; Per-user install, no admin rights needed
 PrivilegesRequired=lowest
 OutputDir=dist_installer
 OutputBaseFilename=ClaudeUsageTray-Setup
@@ -31,8 +31,8 @@ Name: "thai"; MessagesFile: "compiler:Default.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "สร้างไอคอนบนหน้าจอ (Desktop)"; GroupDescription: "ทางลัด:"
-Name: "startup"; Description: "เริ่มโปรแกรมอัตโนมัติเมื่อเปิดเครื่อง (แนะนำ)"; GroupDescription: "การเริ่มทำงาน:"
+Name: "desktopicon"; Description: "Create a desktop icon"; GroupDescription: "Shortcuts:"
+Name: "startup"; Description: "Start automatically when Windows starts (recommended)"; GroupDescription: "Startup:"
 
 [Files]
 Source: "dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
@@ -40,19 +40,19 @@ Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion isreadme
 
 [Icons]
 Name: "{group}\Claude Usage Tray"; Filename: "{app}\{#MyAppExeName}"
-Name: "{group}\ถอนการติดตั้ง Claude Usage Tray"; Filename: "{uninstallexe}"
+Name: "{group}\Uninstall Claude Usage Tray"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\Claude Usage Tray"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Registry]
-; autostart ผ่าน HKCU Run key (ตรงกับที่ตัวแอปจัดการเอง) — สร้างเมื่อเลือก task
+; autostart via the HKCU Run key (matches what the app manages itself) — created when the task is selected
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
   ValueType: string; ValueName: "ClaudeUsageTray"; ValueData: """{app}\{#MyAppExeName}"""; \
   Flags: uninsdeletevalue; Tasks: startup
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "เปิด Claude Usage Tray เดี๋ยวนี้"; \
+Filename: "{app}\{#MyAppExeName}"; Description: "Launch Claude Usage Tray now"; \
   Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
-; ปิดโปรแกรมก่อนถอนติดตั้ง (กันไฟล์ถูกล็อก)
+; Close the program before uninstalling (avoids locked files)
 Filename: "{cmd}"; Parameters: "/c taskkill /IM {#MyAppExeName} /F"; Flags: runhidden; RunOnceId: "KillApp"

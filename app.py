@@ -1,7 +1,7 @@
-"""Entry point สำหรับ PyInstaller (import แบบ absolute).
+"""Entry point for PyInstaller (absolute imports).
 
-โหมด dev ใช้ `python -m claude_usage_tray` ได้เหมือนเดิม; ไฟล์นี้มีไว้ให้ตัว build
-ชี้เข้ามาโดยไม่ติดปัญหา relative import ตอนถูกรันเป็นสคริปต์ top-level.
+In dev mode `python -m claude_usage_tray` works as before; this file exists so the build
+can point at it without relative-import problems when run as a top-level script.
 """
 from claude_usage_tray.tray import main
 

@@ -1,7 +1,7 @@
-"""วาดไอคอนถาดระบบ — ดาว/ประกาย Claude ระบายสีตามสถานะ + วงแหวนวัดระดับ.
+"""Draw the system-tray icon — the Claude star/spark coloured by status + a gauge ring.
 
-สีของดาว = สัญญาณหลัก (เขียว/ส้ม/แดง). วงแหวนรอบนอก = สัดส่วนที่ "ใช้ไปแล้ว".
-ตัวเลข % ที่เหลือ (option) วางมุมล่างขวา.
+Star colour = main signal (green/orange/red). Outer ring = the share "already used".
+The remaining-% number (optional) goes in the lower-right corner.
 """
 from __future__ import annotations
 
@@ -9,20 +9,20 @@ from PIL import Image, ImageDraw, ImageFont
 
 from .status import COLORS, RED, Status
 
-_SIZE = 256          # วาดใหญ่แล้วให้ pystray ย่อ = คมกว่า
-_N_RAYS = 11         # จำนวนแฉกของประกาย Claude
-_BG = (0, 0, 0, 0)   # โปร่งใส
+_SIZE = 256          # draw large and let pystray shrink it = sharper
+_N_RAYS = 11         # number of rays in the Claude spark
+_BG = (0, 0, 0, 0)   # transparent
 
 
 def _petal(color: tuple[int, int, int], inner: float, outer: float, width: float) -> Image.Image:
-    """สร้างภาพแฉกเดี่ยว (แนวตั้ง ชี้ขึ้น) แบบปลายมน เพื่อเอาไปหมุนรอบจุดศูนย์กลาง."""
+    """Create a single ray image (vertical, pointing up) with rounded ends, to be rotated around the centre."""
     layer = Image.new("RGBA", (_SIZE, _SIZE), _BG)
     d = ImageDraw.Draw(layer)
     cx = _SIZE / 2
     top = cx - outer
     bottom = cx - inner
     half = width / 2
-    # แคปซูลแนวตั้ง = สี่เหลี่ยม + วงกลมสองปลาย (ปลายมน)
+    # vertical capsule = rectangle + a circle at each end (rounded ends)
     d.rounded_rectangle(
         [cx - half, top, cx + half, bottom],
         radius=half,
@@ -32,9 +32,9 @@ def _petal(color: tuple[int, int, int], inner: float, outer: float, width: float
 
 
 def _starburst(color: tuple[int, int, int], alpha: int = 255) -> Image.Image:
-    """ประกอบแฉกทั้งหมดเป็นดาวประกายแบบโลโก้ Claude (เต็มเฟรม)."""
+    """Assemble all the rays into a Claude-logo-style spark (full frame)."""
     burst = Image.new("RGBA", (_SIZE, _SIZE), _BG)
-    # แฉกยาวเกือบชนขอบ + กว้างขึ้น = กราฟิกใหญ่เต็มไอคอน
+    # rays reach almost to the edge + wider = a large graphic filling the icon
     petal = _petal(color, inner=_SIZE * 0.05, outer=_SIZE * 0.485, width=_SIZE * 0.135)
     for i in range(_N_RAYS):
         angle = i * (360 / _N_RAYS)
@@ -46,13 +46,13 @@ def _starburst(color: tuple[int, int, int], alpha: int = 255) -> Image.Image:
 
 
 def _ring(draw: ImageDraw.ImageDraw, used_pct: float, color: tuple[int, int, int]) -> None:
-    """วงแหวนวัดระดับรอบนอก: เต็มวง = ใช้ไป 100%."""
+    """Outer gauge ring: full circle = 100% used."""
     pad = _SIZE * 0.03
     box = [pad, pad, _SIZE - pad, _SIZE - pad]
     w = int(_SIZE * 0.07)
-    # รางจาง
+    # faint track
     draw.arc(box, 0, 360, fill=color + (55,), width=w)
-    # ส่วนที่ใช้ไป เริ่มจากบนสุด (-90°) ตามเข็ม
+    # the used part, starting from the top (-90°), clockwise
     sweep = max(0.0, min(100.0, used_pct)) / 100 * 360
     if sweep > 0:
         draw.arc(box, -90, -90 + sweep, fill=color + (255,), width=w)
@@ -68,17 +68,17 @@ def _best_font(px: int):
 
 
 def _draw_center_number(img: Image.Image, remaining: float, color: tuple[int, int, int]) -> None:
-    """ตัวเลข % ที่เหลือ 'ใหญ่เต็มกลางไอคอน' บนแผ่นกลมทึบ อ่านง่ายแม้ไอคอนเล็ก."""
+    """Remaining-% number drawn large in the centre of the icon on a solid disc, easy to read even when the icon is small."""
     d = ImageDraw.Draw(img)
     txt = f"{int(round(remaining))}"
 
-    # แผ่นรองกลมทึบตรงกลาง ให้ตัวเลขเด่นเหนือประกาย
+    # solid round backing disc in the centre so the number stands out over the spark
     r = int(_SIZE * 0.375)
     cx = cy = _SIZE // 2
     d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(15, 23, 42, 245))
     d.ellipse([cx - r, cy - r, cx + r, cy + r], outline=color + (255,), width=int(_SIZE * 0.03))
 
-    # เลือกขนาดฟอนต์ใหญ่สุดที่ยังพอในแผ่น (1-3 หลัก)
+    # pick the largest font size that still fits in the disc (1-3 digits)
     max_w = int(r * 1.55)
     px = int(_SIZE * (0.62 if len(txt) == 1 else 0.50 if len(txt) == 2 else 0.38))
     while px > 8:
@@ -93,7 +93,7 @@ def _draw_center_number(img: Image.Image, remaining: float, color: tuple[int, in
 
 
 def render(status: Status, cfg: dict, dim: bool = False) -> Image.Image:
-    """สร้างภาพไอคอนจากสถานะ. dim=True ใช้ตอนกะพริบ (เฟรมจาง)."""
+    """Build the icon image from the status. dim=True is used when blinking (faded frame)."""
     color = COLORS[status.color]
     img = Image.new("RGBA", (_SIZE, _SIZE), _BG)
     d = ImageDraw.Draw(img)
@@ -101,14 +101,14 @@ def render(status: Status, cfg: dict, dim: bool = False) -> Image.Image:
     used = 100.0 - (status.remaining_pct if status.remaining_pct is not None else 100.0)
     show_num = cfg.get("show_percent_text") and status.remaining_pct is not None
     _ring(d, used, color)
-    # ถ้าโชว์ตัวเลข ให้ประกายจางลงเป็นฉากหลัง เพื่อให้เลขเด่น
+    # if the number is shown, fade the spark into the background so the number stands out
     img.alpha_composite(_starburst(color, alpha=150 if show_num else 255))
 
     if show_num:
         _draw_center_number(img, status.remaining_pct, color)
 
     if dim:
-        # เฟรมจางสำหรับกะพริบ (ลด alpha ทั้งภาพ)
+        # faded frame for blinking (lower alpha over the whole image)
         alpha = img.split()[3].point(lambda a: int(a * 0.35))
         img.putalpha(alpha)
 

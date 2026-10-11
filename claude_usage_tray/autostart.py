@@ -1,4 +1,4 @@
-"""เปิด/ปิด 'เริ่มพร้อม Windows' ผ่าน registry Run key (HKCU)."""
+"""Enable/disable 'Start with Windows' via the registry Run key (HKCU)."""
 from __future__ import annotations
 
 import sys
@@ -9,10 +9,10 @@ _RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 
 
 def _command() -> str:
-    """คำสั่งที่จะให้ Windows รันตอนบูต."""
-    if getattr(sys, "frozen", False):  # ถูก build เป็น .exe แล้ว
+    """Command Windows will run at boot."""
+    if getattr(sys, "frozen", False):  # already built as an .exe
         return f'"{sys.executable}"'
-    # โหมด dev: ใช้ pythonw (ไม่มีหน้าต่าง console) รันเป็นโมดูล
+    # dev mode: run as a module with pythonw (no console window)
     pyw = Path(sys.executable).with_name("pythonw.exe")
     exe = pyw if pyw.exists() else Path(sys.executable)
     return f'"{exe}" -m claude_usage_tray'
@@ -44,7 +44,7 @@ def disable() -> None:
 
 
 def toggle() -> bool:
-    """สลับสถานะ คืนค่าสถานะใหม่ (True=เปิด)."""
+    """Toggle the state and return the new state (True=enabled)."""
     if is_enabled():
         disable()
         return False

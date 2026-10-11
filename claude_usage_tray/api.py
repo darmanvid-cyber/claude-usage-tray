@@ -1,10 +1,10 @@
-"""API client — อ่าน OAuth token ของ Claude Code แล้วถาม usage endpoint.
+"""API client — reads Claude Code's OAuth token and queries the usage endpoint.
 
-โมดูลนี้เป็น "ที่เดียว" ที่แตะ credential. คุยกับ api.anthropic.com เท่านั้น และ
-ใช้ token ในเฮดเดอร์ Authorization เท่านั้น (ไม่เขียนลงดิสก์ ไม่ส่งไปที่อื่น).
+This module is the "only place" that touches the credential. It talks only to api.anthropic.com and
+uses the token only in the Authorization header (never written to disk, never sent elsewhere).
 
-Token จะถูก Claude Code หมุน (refresh) ให้เองในไฟล์ .credentials.json เราจึงแค่
-อ่านไฟล์ใหม่ทุกรอบ ไม่ต้อง refresh เอง.
+Claude Code rotates (refreshes) the token itself in .credentials.json, so we just
+re-read the file every cycle and never refresh it ourselves.
 """
 from __future__ import annotations
 
@@ -26,26 +26,26 @@ CLAUDE_CONFIG_DIR = (
 )
 CLAUDE_CREDENTIALS = CLAUDE_CONFIG_DIR / ".credentials.json"
 
-# ถ้าหา version ของ claude CLI ไม่เจอ ใช้ค่านี้แทน (ต้องมี User-Agent claude-code/*
-# ไม่งั้นจะโดน bucket ที่ rate-limit หนักและ 429 ตลอด)
+# If the claude CLI version cannot be found, use this instead (a User-Agent claude-code/* is required
+# otherwise we land in a heavily rate-limited bucket and always get 429)
 _FALLBACK_UA = "claude-code/2.1.204"
 _cached_ua: str | None = None
 
 
 def read_access_token() -> str | None:
-    """อ่าน accessToken ปัจจุบันจากไฟล์ credential."""
+    """Read the current accessToken from the credential file."""
     if not CLAUDE_CREDENTIALS.exists():
         return None
     try:
         creds = json.loads(CLAUDE_CREDENTIALS.read_text(encoding="utf-8"))
         return creds.get("claudeAiOauth", {}).get("accessToken") or None
     except (OSError, ValueError, KeyError):
-        # OSError ครอบเคสอ่านชนกับตอน Claude Code เขียนไฟล์ทับ (หมุน token) ด้วย
+        # OSError also covers a read colliding with Claude Code overwriting the file (token rotation)
         return None
 
 
 def read_plan() -> str | None:
-    """อ่านชื่อแพ็กเกจสำหรับ badge (เช่น 'Max (20×)' / 'Pro') จาก credential."""
+    """Read the plan name for the badge (e.g. 'Max (20×)' / 'Pro') from the credential."""
     if not CLAUDE_CREDENTIALS.exists():
         return None
     try:
@@ -70,7 +70,7 @@ def _user_agent() -> str:
         out = subprocess.run(
             ["claude", "--version"],
             capture_output=True, text=True, timeout=5,
-            shell=os.name == "nt",  # บน Windows claude เป็น .cmd ต้องผ่าน shell
+            shell=os.name == "nt",  # on Windows claude is a .cmd and must go through the shell
         )
         m = re.search(r"(\d+\.\d+\.\d+)", out.stdout or "")
         if m:
@@ -94,32 +94,32 @@ def _headers() -> dict[str, str] | None:
 
 
 def fetch_usage() -> dict[str, Any]:
-    """ดึงข้อมูล usage. คืน dict เสมอ; ถ้า error จะมีคีย์ 'error'.
+    """Fetch usage data. Always returns a dict; on error it has an 'error' key.
 
-    รูปแบบสำเร็จ (คีย์สำคัญ):
+    Success format (key fields):
         {
           "five_hour": {"utilization": 33.0, "resets_at": "..."},
           "seven_day": {"utilization": 13.0, "resets_at": "..."},
           "seven_day_opus": null | {...},
           ...
         }
-    utilization = % ที่ "ใช้ไปแล้ว" (0-100).
+    utilization = % "already used" (0-100).
     """
     headers = _headers()
     if not headers:
-        return {"error": "no_token", "message": "ไม่พบ token — ล็อกอิน Claude Code ก่อน"}
+        return {"error": "no_token", "message": "Token not found — log in to Claude Code first"}
     try:
         resp = requests.get(API_URL_USAGE, headers=headers, timeout=10)
         resp.raise_for_status()
         return resp.json()
     except requests.ConnectionError:
-        return {"error": "connection", "message": "เชื่อมต่อไม่ได้"}
+        return {"error": "connection", "message": "Could not connect"}
     except requests.HTTPError as e:
         code = e.response.status_code if e.response is not None else 0
         if code == 401:
-            return {"error": "auth", "message": "token หมดอายุ — เปิด Claude Code ใหม่"}
+            return {"error": "auth", "message": "Token expired — reopen Claude Code"}
         if code == 429:
-            return {"error": "rate_limited", "message": "โดน rate limit (poll ถี่ไป)"}
+            return {"error": "rate_limited", "message": "Rate limited (polling too often)"}
         return {"error": "http", "message": f"HTTP {code or '?'}"}
     except Exception as e:  # noqa: BLE001
         return {"error": "unknown", "message": str(e)[:80]}

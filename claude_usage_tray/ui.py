@@ -1,7 +1,7 @@
-"""หน้าต่างกราฟิก (tkinter) — รายละเอียดโควต้า, popup เตือน, และ onboarding.
+"""Graphical windows (tkinter) — quota details, alert popup, and onboarding.
 
-ทุกหน้าต่างรันในเธรดของตัวเอง (มี Tk root + mainloop แยก) เพื่อไม่ชนกับลูปถาดระบบ
-ของ pystray. ใช้เฉพาะ stdlib (tkinter) + Pillow ที่มีอยู่แล้ว จึง bundle ลง .exe ได้
+Every window runs in its own thread (separate Tk root + mainloop) so it does not clash with the system-tray loop
+of pystray. Uses only the stdlib (tkinter) + Pillow, so it can be bundled into the .exe.
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from .status import COLORS, GREEN, ORANGE, RED, Status, humanize_reset
 
 GITHUB_URL = "https://github.com/ksmaster03/claude-usage-tray"
 
-# โทนสี (ธีมเข้ม)
+# Colour palette (dark theme)
 BG = "#0b1220"
 CARD = "#151f34"
 CARD2 = "#1b2740"
@@ -47,7 +47,7 @@ def _classify(remaining: float, cfg: dict) -> str:
 
 
 def _photo(pil_img, size: int) -> tk.PhotoImage:
-    """PIL image -> tk.PhotoImage (ผ่าน PNG+base64, ไม่ต้องพึ่ง ImageTk)."""
+    """PIL image -> tk.PhotoImage (via PNG+base64, no ImageTk needed)."""
     im = pil_img.resize((size, size))
     buf = io.BytesIO()
     im.save(buf, format="PNG")
@@ -79,7 +79,7 @@ def _progress(parent, frac: float, color: str, width: int = 300, h: int = 16) ->
 
 
 def _once(key: str) -> bool:
-    """คืน True ถ้ายังไม่มีหน้าต่างชนิดนี้เปิดอยู่ (กันเปิดซ้อน)."""
+    """Return True if no window of this kind is open yet (prevents duplicates)."""
     with _lock:
         if _open_windows.get(key):
             return False
@@ -102,7 +102,7 @@ def _in_rect(x, y, rect) -> bool:
     return rect[0] <= x <= rect[2] and rect[1] <= y <= rect[3]
 
 
-# ---------- หน้า Dashboard สวย (สไตล์ AC app) ----------
+# ---------- Graphical dashboard (AC-app style) ----------
 def show_details(get_status: Callable[[], Status], cfg: dict, on_refresh: Callable[[], None]) -> None:
     if not _once("details"):
         return
@@ -112,7 +112,7 @@ def show_details(get_status: Callable[[], Status], cfg: dict, on_refresh: Callab
 def _dashboard_window(get_status, cfg, on_refresh) -> None:
     try:
         root = tk.Tk()
-        root.overrideredirect(True)          # frameless = ลุคพรีเมียม
+        root.overrideredirect(True)          # frameless = premium look
         root.configure(bg=dashboard.BG_BOT and "#0b0f1c")
         _center(root, dashboard.W, dashboard.H)
 
@@ -123,7 +123,7 @@ def _dashboard_window(get_status, cfg, on_refresh) -> None:
         def redraw():
             s = get_status()
             pil, regions = dashboard.render(s, cfg, st["sel"])
-            st["photo"] = _pil_photo(pil)      # กัน GC
+            st["photo"] = _pil_photo(pil)      # keep a reference (avoid GC)
             st["regions"] = regions
             lbl.config(image=st["photo"])
 
@@ -133,7 +133,7 @@ def _dashboard_window(get_status, cfg, on_refresh) -> None:
                 root.destroy(); return
             if _in_rect(x, y, r.get("settings", (0, 0, 0, 0))):
                 try:
-                    os.startfile(config_mod.CONFIG_PATH)  # เปิดไฟล์ตั้งค่า
+                    os.startfile(config_mod.CONFIG_PATH)  # open the settings file
                 except Exception:  # noqa: BLE001
                     pass
                 return
@@ -157,7 +157,7 @@ def _dashboard_window(get_status, cfg, on_refresh) -> None:
             if not st["press"]:
                 return
             px, py, _, _ = st["press"]
-            if abs(e.x_root - px) < 5 and abs(e.y_root - py) < 5:  # คลิก (ไม่ใช่ลาก)
+            if abs(e.x_root - px) < 5 and abs(e.y_root - py) < 5:  # click (not a drag)
                 hit(e.x, e.y)
 
         lbl.bind("<Button-1>", on_press)
@@ -170,7 +170,7 @@ def _dashboard_window(get_status, cfg, on_refresh) -> None:
         root.after(200, root.focus_force)
         root.after(500, lambda: root.attributes("-topmost", False))
         root.mainloop()
-    except Exception:  # noqa: BLE001 — ถ้า dashboard พัง ใช้หน้าตารางเดิม
+    except Exception:  # noqa: BLE001 — if the dashboard breaks, fall back to the plain window
         _details_window(get_status, cfg, on_refresh)
         return
     finally:
@@ -204,7 +204,7 @@ def _details_window(get_status, cfg, on_refresh) -> None:
         try:
             img = _photo(icon_mod.render(s, cfg), 52)
             lbl = tk.Label(head, image=img, bg=BG)
-            lbl.image = img  # กัน GC
+            lbl.image = img  # keep a reference (avoid GC)
             lbl.pack(side="left")
         except Exception:  # noqa: BLE001
             pass
@@ -216,10 +216,10 @@ def _details_window(get_status, cfg, on_refresh) -> None:
             tk.Label(htxt, text=s.error, bg=BG, fg=_hex(COLORS[ORANGE]),
                      font=(FONT, 10)).pack(anchor="w")
         elif s.remaining_pct is not None:
-            tk.Label(htxt, text=f"เหลือรวมต่ำสุด {s.remaining_pct:.0f}%", bg=BG,
+            tk.Label(htxt, text=f"Lowest remaining {s.remaining_pct:.0f}%", bg=BG,
                      fg=_hex(COLORS[s.color]), font=(FONT, 11, "bold")).pack(anchor="w")
 
-        # การ์ดต่อ quota
+        # one card per quota
         if not s.error:
             for q in s.quotas:
                 col = _hex(COLORS[_classify(q.remaining_pct, cfg)])
@@ -231,12 +231,12 @@ def _details_window(get_status, cfg, on_refresh) -> None:
                          font=(FONT, 11, "bold")).pack(side="left")
                 tk.Label(top, text=f"{q.remaining_pct:.0f}%", bg=CARD, fg=col,
                          font=(FONT, 18, "bold")).pack(side="right")
-                tk.Label(top, text="เหลือ ", bg=CARD, fg=SUB,
+                tk.Label(top, text="left ", bg=CARD, fg=SUB,
                          font=(FONT, 9)).pack(side="right")
                 bar = tk.Frame(card, bg=CARD)
                 bar.pack(fill="x", padx=12)
                 _progress(bar, q.used_pct / 100.0, col, width=W - 84).pack(side="left")
-                tk.Label(card, text=f"ใช้ไป {q.used_pct:.0f}%  ·  รีเซ็ต {humanize_reset(q.resets_at)}",
+                tk.Label(card, text=f"Used {q.used_pct:.0f}%  ·  Resets {humanize_reset(q.resets_at)}",
                          bg=CARD, fg=SUB, font=(FONT, 9)).pack(anchor="w", padx=12, pady=(6, 0))
 
         # legend
@@ -250,7 +250,7 @@ def _details_window(get_status, cfg, on_refresh) -> None:
             dot.create_oval(1, 1, 11, 11, fill=_hex(COLORS[c]), outline="")
             tk.Label(chip, text=t, bg=BG, fg=SUB, font=(FONT, 9)).pack(side="left", padx=4)
 
-        # ปุ่ม
+        # buttons
         btns = tk.Frame(body, bg=BG)
         btns.pack(fill="x", pady=(8, 0))
 
@@ -258,10 +258,10 @@ def _details_window(get_status, cfg, on_refresh) -> None:
             on_refresh()
             root.after(1500, rebuild)
 
-        tk.Button(btns, text="⟳ รีเฟรช", command=do_refresh, bg=CARD2, fg=TXT,
+        tk.Button(btns, text="⟳ Refresh", command=do_refresh, bg=CARD2, fg=TXT,
                   activebackground=TRACK, activeforeground=TXT, relief="flat",
                   font=(FONT, 10, "bold"), padx=16, pady=6, cursor="hand2").pack(side="left")
-        tk.Button(btns, text="ปิด", command=root.destroy, bg=CARD, fg=SUB,
+        tk.Button(btns, text="Close", command=root.destroy, bg=CARD, fg=SUB,
                   activebackground=TRACK, activeforeground=TXT, relief="flat",
                   font=(FONT, 10), padx=16, pady=6, cursor="hand2").pack(side="right")
 
@@ -275,7 +275,7 @@ def _details_window(get_status, cfg, on_refresh) -> None:
         _done("details")
 
 
-# ---------- popup เตือนแบบกราฟิก ----------
+# ---------- graphical alert popup ----------
 def show_alert(status: Status, cfg: dict, is_red: bool, reset_text: str) -> None:
     threading.Thread(target=_alert_window, args=(status, cfg, is_red, reset_text), daemon=True).start()
 
@@ -283,13 +283,13 @@ def show_alert(status: Status, cfg: dict, is_red: bool, reset_text: str) -> None
 def _alert_window(status: Status, cfg: dict, is_red: bool, reset_text: str) -> None:
     color = COLORS[RED if is_red else ORANGE]
     root = tk.Tk()
-    root.title("Claude Usage — เตือนโควต้า")
+    root.title("Claude Usage — Quota alert")
     root.configure(bg=BG)
     root.resizable(False, False)
     W, H = 420, 300
     _center(root, W, H)
 
-    # แถบสีหัว
+    # coloured header band
     band = tk.Frame(root, bg=_hex(color), height=8)
     band.pack(fill="x")
 
@@ -304,17 +304,17 @@ def _alert_window(status: Status, cfg: dict, is_red: bool, reset_text: str) -> N
     except Exception:  # noqa: BLE001
         pass
 
-    title = "⛔ โควต้าใกล้หมด!" if is_red else "⚠ โควต้าเริ่มเหลือน้อย"
+    title = "⛔ Quota almost used up!" if is_red else "⚠ Quota is getting low"
     tk.Label(wrap, text=title, bg=BG, fg=_hex(color), font=(FONT, 15, "bold")).pack()
 
     rem = status.remaining_pct if status.remaining_pct is not None else 0
-    tk.Label(wrap, text=f"เหลือ {rem:.0f}%", bg=BG, fg=TXT, font=(FONT, 26, "bold")).pack(pady=(2, 2))
-    tk.Label(wrap, text=f"จะรีเซ็ต {reset_text}", bg=BG, fg=SUB, font=(FONT, 10)).pack()
-    msg = ("ใช้ต่อได้อีกไม่มาก โปรดวางแผนการใช้งาน" if is_red
-           else "ใช้ไปเกินครึ่งแล้ว เริ่มระวังการใช้งาน")
+    tk.Label(wrap, text=f"{rem:.0f}% left", bg=BG, fg=TXT, font=(FONT, 26, "bold")).pack(pady=(2, 2))
+    tk.Label(wrap, text=f"Resets {reset_text}", bg=BG, fg=SUB, font=(FONT, 10)).pack()
+    msg = ("Not much left — plan your usage" if is_red
+           else "More than half used — start pacing yourself")
     tk.Label(wrap, text=msg, bg=BG, fg=SUB, font=(FONT, 10)).pack(pady=(6, 10))
 
-    tk.Button(wrap, text="รับทราบ", command=root.destroy, bg=_hex(color), fg="#0b1220",
+    tk.Button(wrap, text="Got it", command=root.destroy, bg=_hex(color), fg="#0b1220",
               activebackground=_hex(color), relief="flat", font=(FONT, 11, "bold"),
               padx=28, pady=7, cursor="hand2").pack()
 
@@ -326,7 +326,7 @@ def _alert_window(status: Status, cfg: dict, is_red: bool, reset_text: str) -> N
         pass
 
 
-# ---------- onboarding / เชื่อมต่อบัญชี ----------
+# ---------- onboarding / connect account ----------
 def show_onboarding(recheck: Callable[[], bool], open_login: Callable[[], None],
                     has_cli: Callable[[], bool]) -> None:
     if not _once("onboard"):
@@ -336,7 +336,7 @@ def show_onboarding(recheck: Callable[[], bool], open_login: Callable[[], None],
 
 def _onboard_window(recheck, open_login, has_cli) -> None:
     root = tk.Tk()
-    root.title("Claude Usage — เชื่อมต่อบัญชี")
+    root.title("Claude Usage — Connect account")
     root.configure(bg=BG)
     root.resizable(False, False)
     W, H = 480, 420
@@ -346,19 +346,19 @@ def _onboard_window(recheck, open_login, has_cli) -> None:
     wrap = tk.Frame(root, bg=BG)
     wrap.pack(fill="both", expand=True, padx=26, pady=20)
 
-    tk.Label(wrap, text="เชื่อมต่อบัญชี Claude ของคุณ", bg=BG, fg=TXT,
+    tk.Label(wrap, text="Connect your Claude account", bg=BG, fg=TXT,
              font=(FONT, 16, "bold")).pack(anchor="w")
-    tk.Label(wrap, text="แอปนี้อ่านสถานะโควต้าจากบัญชีที่ล็อกอินไว้ใน Claude Code\n"
-                        "(อ่านอย่างเดียว ไม่เก็บ ไม่ส่ง token ไปที่ไหน)",
+    tk.Label(wrap, text="This app reads quota status from the account logged in to Claude Code\n"
+                        "(read-only; the token is never stored or sent anywhere)",
              bg=BG, fg=SUB, font=(FONT, 10), justify="left").pack(anchor="w", pady=(4, 14))
 
     steps = tk.Frame(wrap, bg=CARD)
     steps.pack(fill="x", ipady=10)
-    txt = ("ขั้นตอน:\n"
-           "1) ติดตั้ง Claude Code  (npm i -g @anthropic-ai/claude-code)\n"
-           "2) เปิด terminal พิมพ์  claude  แล้วสั่ง  /login\n"
-           "3) ล็อกอินด้วยบัญชี Claude (Pro/Max/Team) ในเบราว์เซอร์\n"
-           "4) กลับมากดปุ่ม \"ตรวจสอบอีกครั้ง\" ด้านล่าง")
+    txt = ("Steps:\n"
+           "1) Install Claude Code  (npm i -g @anthropic-ai/claude-code)\n"
+           "2) Open a terminal, type  claude  and run  /login\n"
+           "3) Log in with your Claude account (Pro/Max/Team) in the browser\n"
+           "4) Come back and press \"Check again\" below")
     tk.Label(steps, text=txt, bg=CARD, fg=TXT, font=(FONT, 10),
              justify="left").pack(anchor="w", padx=14, pady=6)
 
@@ -367,28 +367,28 @@ def _onboard_window(recheck, open_login, has_cli) -> None:
 
     def do_recheck():
         if recheck():
-            status_lbl.config(text="✅ เชื่อมต่อสำเร็จ! ปิดหน้าต่างนี้ได้เลย",
+            status_lbl.config(text="✅ Connected! You can close this window",
                               fg=_hex(COLORS[GREEN]))
             root.after(1500, root.destroy)
         else:
-            status_lbl.config(text="❌ ยังไม่พบการล็อกอิน — ทำตามขั้นตอนแล้วลองใหม่",
+            status_lbl.config(text="❌ No login found yet — follow the steps and try again",
                               fg=_hex(COLORS[RED]))
 
     def do_login():
         open_login()
-        status_lbl.config(text="กำลังเปิด terminal สำหรับ login… เสร็จแล้วกด \"ตรวจสอบอีกครั้ง\"",
+        status_lbl.config(text="Opening a terminal for login… when done, press \"Check again\"",
                           fg=SUB)
 
     btns = tk.Frame(wrap, bg=BG)
     btns.pack(fill="x", pady=(4, 0))
     if has_cli():
-        tk.Button(btns, text="เปิด Login ผ่าน Claude Code", command=do_login,
+        tk.Button(btns, text="Log in via Claude Code", command=do_login,
                   bg=_hex(COLORS[GREEN]), fg="#0b1220", relief="flat",
                   font=(FONT, 10, "bold"), padx=16, pady=7, cursor="hand2").pack(side="left")
     else:
-        tk.Label(btns, text="⚠ ไม่พบคำสั่ง claude — ติดตั้ง Claude Code ก่อน",
+        tk.Label(btns, text="⚠ claude command not found — install Claude Code first",
                  bg=BG, fg=_hex(COLORS[ORANGE]), font=(FONT, 9)).pack(side="left")
-    tk.Button(btns, text="ตรวจสอบอีกครั้ง", command=do_recheck, bg=CARD2, fg=TXT,
+    tk.Button(btns, text="Check again", command=do_recheck, bg=CARD2, fg=TXT,
               relief="flat", font=(FONT, 10, "bold"), padx=16, pady=7,
               cursor="hand2").pack(side="right")
 
@@ -400,7 +400,7 @@ def _onboard_window(recheck, open_login, has_cli) -> None:
         _done("onboard")
 
 
-# ---------- widget ลอยหน้าจอ (ธีมสว่าง โปร่งใส ปักหมุด) ----------
+# ---------- floating widget (light theme, translucent, pinnable) ----------
 def show_widget(get_status: Callable[[], Status], cfg: dict, on_refresh: Callable[[], None]) -> None:
     if not _once("widget"):
         return
@@ -415,12 +415,12 @@ def _widget_window(get_status, cfg, on_refresh) -> None:
             root.attributes("-alpha", float(cfg.get("widget_opacity", 0.94)))
         except Exception:  # noqa: BLE001
             pass
-        # วางมุมขวาล่างเหนือถาดระบบ
+        # place bottom-right, above the system tray
         root.update_idletasks()
         x = root.winfo_screenwidth() - widget_mod.W - 24
         y = root.winfo_screenheight() - widget_mod.H - 64
         root.geometry(f"{widget_mod.W}x{widget_mod.H}+{x}+{y}")
-        # ย้ำตำแหน่งอีกครั้งหลัง map (overrideredirect บางทีไม่รับ +x+y ทันที)
+        # set the position again after map (overrideredirect sometimes ignores +x+y at first)
         root.after(40, lambda: root.geometry(f"+{x}+{y}"))
 
         widget_mod._cache["_pinned"] = True
@@ -483,7 +483,7 @@ def _widget_window(get_status, cfg, on_refresh) -> None:
         _done("widget")
 
 
-# ---------- หน้าเกี่ยวกับ (About) ----------
+# ---------- About window ----------
 def show_about(get_status: Callable[[], Status], cfg: dict) -> None:
     if not _once("about"):
         return
@@ -492,7 +492,7 @@ def show_about(get_status: Callable[[], Status], cfg: dict) -> None:
 
 def _about_window(get_status, cfg) -> None:
     root = tk.Tk()
-    root.title("เกี่ยวกับ Claude Usage Tray")
+    root.title("About Claude Usage Tray")
     root.configure(bg=BG)
     root.resizable(False, False)
     W, H = 420, 430
@@ -512,15 +512,15 @@ def _about_window(get_status, cfg) -> None:
 
     tk.Label(wrap, text="Claude Usage Tray", bg=BG, fg=TXT,
              font=(FONT, 17, "bold")).pack()
-    tk.Label(wrap, text=f"เวอร์ชัน {__version__}", bg=BG, fg=SUB,
+    tk.Label(wrap, text=f"Version {__version__}", bg=BG, fg=SUB,
              font=(FONT, 10)).pack(pady=(0, 10))
 
     desc = (
-        "โปรแกรมเล็ก ๆ บนถาดระบบ Windows ที่คอยดูโควต้า token\n"
-        "ของ Claude Code แบบเรียลไทม์ ไอคอนเปลี่ยนสีตามที่เหลือ\n"
-        "(เขียว > ส้ม > แดง) และคลิกเปิดหน้า Dashboard ดูรายละเอียดได้\n\n"
-        "อ่าน credential ในเครื่องแบบอ่านอย่างเดียว เพื่อแสดงการใช้งาน\n"
-        "ของคุณเอง ไม่เก็บ ไม่ส่ง token ไปที่ไหน"
+        "A small Windows system-tray app that watches your Claude Code\n"
+        "token quota in real time. The icon changes colour as quota runs down\n"
+        "(green > orange > red); click it to open the dashboard for details.\n\n"
+        "It reads your local credential read-only, only to show your own usage;\n"
+        "the token is never stored or sent anywhere."
     )
     tk.Label(wrap, text=desc, bg=BG, fg=TXT, font=(FONT, 10),
              justify="center").pack(pady=(0, 14))
@@ -530,10 +530,10 @@ def _about_window(get_status, cfg) -> None:
     link.pack()
     link.bind("<Button-1>", lambda _e: webbrowser.open(GITHUB_URL))
 
-    tk.Label(wrap, text="ฟรีและโอเพนซอร์ส · สัญญาอนุญาต MIT", bg=BG, fg=SUB,
+    tk.Label(wrap, text="Free and open source · MIT license", bg=BG, fg=SUB,
              font=(FONT, 9)).pack(pady=(6, 12))
 
-    tk.Button(wrap, text="ปิด", command=root.destroy, bg=CARD2, fg=TXT,
+    tk.Button(wrap, text="Close", command=root.destroy, bg=CARD2, fg=TXT,
               activebackground=TRACK, activeforeground=TXT, relief="flat",
               font=(FONT, 10, "bold"), padx=26, pady=6, cursor="hand2").pack()
 

@@ -1,7 +1,7 @@
-"""สร้างภาพ infographic สำหรับ README (docs/).
+"""Generate infographic images for the README (docs/).
 
-รันจาก root ของโปรเจกต์:  python scripts/make_docs.py
-ผลลัพธ์: docs/hero.png, docs/states.png, docs/how-it-works.png
+Run from the project root:  python scripts/make_docs.py
+Output: docs/hero.png, docs/states.png, docs/how-it-works.png
 """
 from __future__ import annotations
 
@@ -69,7 +69,7 @@ def shadow_card(base, card, xy, radius=28, blur=30, alpha=150):
     sd.rounded_rectangle([x + 10, y + 18, x + card.width + 10, y + card.height + 18],
                          radius, fill=(0, 0, 0, alpha))
     base.alpha_composite(sh.filter(ImageFilter.GaussianBlur(blur)))
-    # มุมโค้งให้การ์ด
+    # rounded corners for the card
     mask = Image.new("L", card.size, 0)
     ImageDraw.Draw(mask).rounded_rectangle([0, 0, card.width, card.height], radius, fill=255)
     base.paste(card, xy, mask)
@@ -77,15 +77,15 @@ def shadow_card(base, card, xy, radius=28, blur=30, alpha=150):
 
 def dash(rem, sel="five_hour"):
     color = "green" if rem > 50 else ("orange" if rem > 20 else "red")
-    q = [Quota("five_hour", "5 ชั่วโมง", 100 - rem, rem, "2026-07-11T20:00:00+00:00"),
-         Quota("seven_day", "รายสัปดาห์", 9, 91, "2026-07-17T00:00:00+00:00")]
+    q = [Quota("five_hour", "5 hours", 100 - rem, rem, "2026-07-11T20:00:00+00:00"),
+         Quota("seven_day", "Weekly", 9, 91, "2026-07-17T00:00:00+00:00")]
     img, _ = db.render(Status(color, rem, "five_hour", q), CFG, sel)
     return img.convert("RGBA")
 
 
 def tray_icon(rem):
     color = "green" if rem > 50 else ("orange" if rem > 20 else "red")
-    q = [Quota("five_hour", "5 ชั่วโมง", 100 - rem, rem, None)]
+    q = [Quota("five_hour", "5 hours", 100 - rem, rem, None)]
     return ic.render(Status(color, rem, "five_hour", q), CFG).convert("RGBA")
 
 
@@ -94,19 +94,19 @@ def make_hero():
     W, Hh = 1200, 620
     img = vgrad(W, Hh)
     d = ImageDraw.Draw(img)
-    # glow มุมขวา
+    # glow in the right corner
     g = Image.new("RGBA", (W, Hh), (0, 0, 0, 0))
     ImageDraw.Draw(g).ellipse([W - 520, -160, W + 120, 420], fill=ACCENT + (46,))
     img.alpha_composite(g.filter(ImageFilter.GaussianBlur(120)))
     d = ImageDraw.Draw(img)
 
-    # การ์ด dashboard ด้านขวา
+    # dashboard card on the right
     card = dash(76)
     scale = 500 / card.height
     card = card.resize((int(card.width * scale), 500), Image.LANCZOS)
     shadow_card(img, card, (W - card.width - 90, (Hh - card.height) // 2))
 
-    # ข้อความซ้าย
+    # text on the left
     lx = 80
     text(d, (lx, 120), "Claude Usage Tray", font(58, "bold"), TXT)
     text(d, (lx, 196), "Monitor your Claude Code token usage", font(26, "regular"), SUB)
@@ -190,14 +190,14 @@ def make_flow():
     img.convert("RGB").save(os.path.join(DOCS, "how-it-works.png"))
 
 
-# ---------- WIDGET (ธีมสว่าง) ----------
+# ---------- WIDGET (light theme) ----------
 def make_widget():
     from claude_usage_tray import widget as wg
-    q = [Quota("five_hour", "5 ชั่วโมง", 12, 88, "2026-07-11T20:48:00+00:00"),
-         Quota("seven_day", "รายสัปดาห์", 10, 90, "2026-07-13T12:59:00+00:00")]
+    q = [Quota("five_hour", "5 hours", 12, 88, "2026-07-11T20:48:00+00:00"),
+         Quota("seven_day", "Weekly", 10, 90, "2026-07-13T12:59:00+00:00")]
     card, _ = wg.render(Status("green", 88, "five_hour", q), CFG, "Max (20×)", "23:31")
     W2, H2 = 460, 320
-    bg = vgrad(W2, H2, (232, 236, 244), (214, 221, 234))  # ฉากสว่างนวล
+    bg = vgrad(W2, H2, (232, 236, 244), (214, 221, 234))  # soft light backdrop
     x = (W2 - card.width) // 2
     y = (H2 - card.height) // 2
     bg.alpha_composite(card, (x, y))

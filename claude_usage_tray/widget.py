@@ -1,8 +1,8 @@
-"""เรนเดอร์ widget ลอยหน้าจอ ธีมสว่าง (สไตล์ /usage ของ Claude).
+"""Render the floating widget, light theme (Claude /usage style).
 
-แถบ usage แนวนอนบอก % ที่ "ใช้ไป" ของแต่ละหน้าต่างโควต้า + badge แพ็กเกจ + ปุ่ม
-รีเฟรช/ปักหมุด/ปิด. ใช้ฟอนต์ Sarabun (ไทย) + Inter (ละติน) + Material Icons Round
-จาก assets/fonts. คืน (image, regions) โดย regions เป็นพิกัด display สำหรับ hit-test.
+Horizontal usage bars show the % "used" for each quota window + a plan badge + buttons for
+refresh/pin/close. Uses the Sarabun (Thai) + Inter (Latin) fonts + Material Icons Round
+from assets/fonts. Returns (image, regions), where regions are display coordinates for hit-testing.
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from .status import COLORS, GREEN, ORANGE, RED, Status, humanize_reset
 W, H = 320, 224
 SS = 2
 
-# ---- โทนสว่าง ----
+# ---- light palette ----
 BG = (250, 250, 252)
 BORDER = (228, 230, 236)
 TXT = (26, 28, 36)
@@ -33,10 +33,10 @@ MI = {"refresh": 0xE5D5, "close": 0xE5CD, "pin": 0xF10D, "monitor": 0xEF5B,
       "dot": 0xE061, "schedule": 0xE8B5}
 
 LABELS = {
-    "five_hour": "เซสชันปัจจุบัน",
-    "seven_day": "สัปดาห์นี้ (ทุกโมเดล)",
-    "seven_day_opus": "Opus (สัปดาห์)",
-    "seven_day_sonnet": "Sonnet (สัปดาห์)",
+    "five_hour": "Current session",
+    "seven_day": "This week (all models)",
+    "seven_day_opus": "Opus (weekly)",
+    "seven_day_sonnet": "Sonnet (weekly)",
 }
 
 _cache: dict[str, Any] = {}
@@ -108,7 +108,7 @@ def render(status: Status, cfg: dict, plan: str | None, updated: str) -> tuple[I
     img = Image.new("RGBA", (W * S, H * S), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
 
-    # เงานุ่ม + การ์ดโค้ง
+    # soft shadow + rounded card
     shadow = Image.new("RGBA", img.size, (0, 0, 0, 0))
     ImageDraw.Draw(shadow).rounded_rectangle(
         [8 * S, 10 * S, (W - 8) * S, (H - 6) * S], 22 * S, fill=(20, 24, 40, 60))
@@ -127,12 +127,12 @@ def render(status: Status, cfg: dict, plan: str | None, updated: str) -> tuple[I
     d = ImageDraw.Draw(img)
     _rt(d, (pad + 34) * S, 22 * S, "Claude Usage", _inter(15 * S, "SemiBold"), TXT)
 
-    # close (มุมขวาบน)
+    # close (top right)
     cxr = W - pad - 4
     _rt(d, cxr * S, 24 * S, chr(MI["close"]), _mi(18 * S), SUB, anchor="mm")
     regions["close"] = (cxr - 13, 12, cxr + 13, 38)
 
-    # badge แพ็กเกจ (ซ้ายของ close)
+    # plan badge (left of close)
     if plan:
         bf = _inter(11 * S, "Medium")
         bb = d.textbbox((0, 0), plan, font=bf)
@@ -141,21 +141,21 @@ def render(status: Status, cfg: dict, plan: str | None, updated: str) -> tuple[I
         _pill(d, [bx1 * S, 16 * S, (bx1 + bw) * S, 34 * S], 9 * S, BADGE_BG + (255,))
         _rt(d, (bx1 + bw / 2) * S, 25 * S, plan, bf, BADGE_TX, anchor="mm")
 
-    # ----- sections (แถบ usage) -----
+    # ----- sections (usage bars) -----
     quotas = [q for q in status.quotas if q.key in ("five_hour", "seven_day")][:2] or status.quotas[:2]
     y = 58
     for q in quotas:
         col = COLORS[_classify(q.remaining_pct, cfg)]
         label = LABELS.get(q.key, q.label)
         _rt(d, pad * S, y * S, label, _sarabun(13.5 * S, "SemiBold"), TXT)
-        _rt(d, (W - pad) * S, y * S, f"{q.used_pct:.0f}% ใช้ไป",
+        _rt(d, (W - pad) * S, y * S, f"{q.used_pct:.0f}% used",
             _sarabun(12 * S, "Medium"), SUB, anchor="ra")
-        # แถบ
+        # bar
         by = y + 22
         _pill(d, [pad * S, by * S, (W - pad) * S, (by + 8) * S], 4 * S, TRACK + (255,))
         fw = max(8, (W - pad * 2) * min(1.0, q.used_pct / 100.0))
         _pill(d, [pad * S, by * S, (pad + fw) * S, (by + 8) * S], 4 * S, col + (255,))
-        _rt(d, pad * S, (by + 12) * S, f"รีเซ็ต {humanize_reset(q.resets_at)}",
+        _rt(d, pad * S, (by + 12) * S, f"Resets {humanize_reset(q.resets_at)}",
             _sarabun(11 * S, "Regular"), SUB)
         y += 56
 
@@ -164,10 +164,10 @@ def render(status: Status, cfg: dict, plan: str | None, updated: str) -> tuple[I
     d.rounded_rectangle([pad * S, (fy - 8) * S, (W - pad) * S, (fy - 8) * S], 0,
                         outline=BORDER + (120,), width=int(1 * S))
     _rt(d, pad * S, fy * S, chr(MI["dot"]), _mi(11 * S), COLORS[GREEN], anchor="lm")
-    _rt(d, (pad + 16) * S, fy * S, f"อัปเดต {updated} · ทุก {cfg['poll_seconds'] // 60} นาที",
+    _rt(d, (pad + 16) * S, fy * S, f"Updated {updated} · every {cfg['poll_seconds'] // 60} min",
         _sarabun(10.5 * S, "Regular"), SUB, anchor="lm")
 
-    # ปุ่มปักหมุด + รีเฟรช (มุมขวาล่าง)
+    # pin + refresh buttons (bottom right)
     pinned = bool(_cache.get("_pinned", True))
     pin_x = W - pad - 12
     _rt(d, pin_x * S, fy * S, chr(MI["pin"]), _mi(16 * S),

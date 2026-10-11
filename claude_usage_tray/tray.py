@@ -1,4 +1,4 @@
-"""ตัวหลัก — วนถาดระบบ, poll usage, เปลี่ยนสีไอคอน, แจ้งเตือน, กะพริบเมื่อแดง."""
+"""Main module — runs the tray loop, polls usage, changes the icon colour, notifies, and blinks when red."""
 from __future__ import annotations
 
 import ctypes
@@ -18,47 +18,47 @@ from .status import RED, Status, evaluate, humanize_reset
 class TrayApp:
     def __init__(self) -> None:
         self.cfg: dict[str, Any] = config.load()
-        self.status: Status = Status("unknown", None, None, [], error="กำลังโหลด…")
+        self.status: Status = Status("unknown", None, None, [], error="Loading…")
         self._last_color: str | None = None
         self._stop = threading.Event()
-        self._wake = threading.Event()   # ปลุกให้ poll ทันที (Refresh)
+        self._wake = threading.Event()   # wake up to poll immediately (Refresh)
         self._blink_on = False
 
         self.icon = pystray.Icon(
             "claude_usage_tray",
             icon=icon_mod.render(self.status, self.cfg),
-            title="Claude Usage — กำลังโหลด…",
+            title="Claude Usage — Loading…",
             menu=self._build_menu(),
         )
 
-    # ---------- เมนู ----------
+    # ---------- menu ----------
     def _build_menu(self) -> pystray.Menu:
         return pystray.Menu(
             pystray.MenuItem(lambda _: self._headline(), None, enabled=False),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("รีเฟรชเดี๋ยวนี้", self._on_refresh),
-            pystray.MenuItem("ดูรายละเอียด…", self._on_details, default=True),
-            pystray.MenuItem("วิดเจ็ตลอยหน้าจอ", self._on_widget),
-            pystray.MenuItem("เชื่อมต่อบัญชี Claude…", self._on_connect),
+            pystray.MenuItem("Refresh now", self._on_refresh),
+            pystray.MenuItem("Show details…", self._on_details, default=True),
+            pystray.MenuItem("Floating widget", self._on_widget),
+            pystray.MenuItem("Connect Claude account…", self._on_connect),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(
-                "เริ่มพร้อม Windows",
+                "Start with Windows",
                 self._on_toggle_autostart,
                 checked=lambda _: autostart.is_enabled(),
             ),
             pystray.MenuItem(
-                "แจ้งเตือน (balloon)",
+                "Notifications (balloon)",
                 self._on_toggle_notify,
                 checked=lambda _: self.cfg.get("notify", True),
             ),
             pystray.MenuItem(
-                "Popup เตือนเมื่อต่ำกว่า 50%/20%",
+                "Popup alert below 50%/20%",
                 self._on_toggle_popup,
                 checked=lambda _: self.cfg.get("popup_alert", True),
             ),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("เกี่ยวกับ", self._on_about),
-            pystray.MenuItem("ออก", self._on_quit),
+            pystray.MenuItem("About", self._on_about),
+            pystray.MenuItem("Quit", self._on_quit),
         )
 
     def _headline(self) -> str:
@@ -66,23 +66,23 @@ class TrayApp:
         if s.error:
             return f"⚠ {s.error}"
         if s.remaining_pct is None:
-            return "ไม่มีข้อมูล"
+            return "No data"
         dot = {"green": "🟢", "orange": "🟠", "red": "🔴"}.get(s.color, "⚪")
-        return f"{dot} เหลือ {s.remaining_pct:.0f}%"
+        return f"{dot} {s.remaining_pct:.0f}% left"
 
     def _details_text(self) -> str:
         s = self.status
         if s.error:
-            return f"สถานะ: {s.error}"
-        lines = ["โควต้าคงเหลือ (Claude Code)\n"]
+            return f"Status: {s.error}"
+        lines = ["Remaining quota (Claude Code)\n"]
         for q in s.quotas:
-            mark = "  ← กำหนดสี" if q.key == s.driver else ""
+            mark = "  ← sets colour" if q.key == s.driver else ""
             lines.append(
-                f"• {q.label}: เหลือ {q.remaining_pct:.0f}%  "
-                f"(ใช้ไป {q.used_pct:.0f}%, รีเซ็ต {humanize_reset(q.resets_at)}){mark}"
+                f"• {q.label}: {q.remaining_pct:.0f}% left  "
+                f"(used {q.used_pct:.0f}%, resets {humanize_reset(q.resets_at)}){mark}"
             )
-        lines.append("\nเกณฑ์สี: เขียว >50%  |  ส้ม ≤50%  |  แดง ≤20%")
-        lines.append(f"อัปเดตทุก {self.cfg['poll_seconds']} วินาที")
+        lines.append("\nColour thresholds: green >50%  |  orange ≤50%  |  red ≤20%")
+        lines.append(f"Updates every {self.cfg['poll_seconds']} seconds")
         return "\n".join(lines)
 
     # ---------- callbacks ----------
@@ -92,7 +92,7 @@ class TrayApp:
     def _on_details(self, *_):
         try:
             ui.show_details(lambda: self.status, self.cfg, self._on_refresh)
-        except Exception:  # noqa: BLE001 — fallback เป็น MessageBox ถ้า tkinter มีปัญหา
+        except Exception:  # noqa: BLE001 — fall back to a MessageBox if tkinter has problems
             threading.Thread(
                 target=lambda: ctypes.windll.user32.MessageBoxW(0, self._details_text(), "Claude Usage", 0x40),
                 daemon=True,
@@ -113,13 +113,13 @@ class TrayApp:
 
     def _recheck_token(self) -> bool:
         if read_access_token():
-            self._wake.set()  # เจอ token แล้ว -> poll ทันที
+            self._wake.set()  # token found -> poll immediately
             return True
         return False
 
     @staticmethod
     def _open_login() -> None:
-        """เปิด terminal ให้ผู้ใช้ login ผ่าน Claude Code อย่างเป็นทางการ."""
+        """Open a terminal so the user can log in through the official Claude Code."""
         try:
             if os.name == "nt":
                 subprocess.Popen(
@@ -147,11 +147,11 @@ class TrayApp:
         self._wake.set()
         self.icon.stop()
 
-    # ---------- ลูปทำงาน ----------
+    # ---------- work loop ----------
     def _poll_loop(self) -> None:
         while not self._stop.is_set():
             self._refresh_once()
-            # รอจนถึงรอบถัดไป หรือถูกปลุก (Refresh/Quit)
+            # wait until the next cycle, or until woken (Refresh/Quit)
             self._wake.wait(timeout=self.cfg["poll_seconds"])
             self._wake.clear()
 
@@ -174,26 +174,26 @@ class TrayApp:
         if s.remaining_pct is None:
             return "Claude Usage"
         parts = [f"{q.label}: {q.remaining_pct:.0f}%" for q in s.quotas[:3]]
-        return "Claude Usage — เหลือ " + "  |  ".join(parts)
+        return "Claude Usage — left: " + "  |  ".join(parts)
 
     def _maybe_notify(self, prev: Status, new: Status) -> None:
         order = {"unknown": 0, "green": 0, "orange": 1, "red": 2}
-        # แจ้งเฉพาะตอน "แย่ลง" ข้ามระดับ (เขียว->ส้ม, ส้ม->แดง)
+        # notify only when things get "worse" across a level (green->orange, orange->red)
         if not (order.get(new.color, 0) > order.get(prev.color, 0) and new.remaining_pct is not None):
             return
 
         is_red = new.color == RED
-        label = "โควต้าใกล้หมด!" if is_red else "โควต้าเริ่มเหลือน้อย"
+        label = "Quota almost used up!" if is_red else "Quota is getting low"
         reset = humanize_reset(_driver_reset(new))
 
         # 1) notification balloon
         if self.cfg.get("notify", True):
             try:
-                self.icon.notify(f"{label} เหลือ {new.remaining_pct:.0f}%\nรีเซ็ต {reset}", "Claude Usage")
+                self.icon.notify(f"{label} {new.remaining_pct:.0f}% left\nResets {reset}", "Claude Usage")
             except Exception:  # noqa: BLE001
                 pass
 
-        # 2) popup หน้าต่างเตือนแบบกราฟิก (เด้งค้างหน้าจอ) เมื่อข้ามลงต่ำกว่า 50%/20%
+        # 2) graphical alert popup (stays on screen) when crossing below 50%/20%
         if self.cfg.get("popup_alert", True):
             try:
                 ui.show_alert(new, self.cfg, is_red, reset)
@@ -201,7 +201,7 @@ class TrayApp:
                 flags = (0x10 if is_red else 0x30) | 0x40000
                 threading.Thread(
                     target=lambda: ctypes.windll.user32.MessageBoxW(
-                        0, f"{label} เหลือ {new.remaining_pct:.0f}%", "Claude Usage", flags),
+                        0, f"{label} {new.remaining_pct:.0f}% left", "Claude Usage", flags),
                     daemon=True,
                 ).start()
 
@@ -215,13 +215,13 @@ class TrayApp:
                     pass
                 self._stop.wait(0.6)
             else:
-                if self._blink_on:  # เพิ่งเลิกกะพริบ -> คืนไอคอนเต็ม
+                if self._blink_on:  # just stopped blinking -> restore the full icon
                     self._blink_on = False
                     self._apply_icon()
                 self._stop.wait(0.5)
 
     def run(self) -> None:
-        # ครั้งแรกยังไม่ login -> เปิดหน้า onboarding ช่วยเชื่อมต่อบัญชี
+        # first run and not logged in -> open the onboarding window to help connect the account
         if not read_access_token():
             ui.show_onboarding(self._recheck_token, self._open_login, self._has_cli)
         elif self.cfg.get("widget_on_start"):

@@ -1,7 +1,7 @@
-"""การตั้งค่าผู้ใช้ — โหลด/บันทึกจากไฟล์ JSON ในโฮมของผู้ใช้.
+"""User settings — load/save from a JSON file in the user's home.
 
-ค่าเริ่มต้นออกแบบให้ปลอดภัยกับ rate limit (poll ทุก 180 วิ) และ threshold สี
-ตรงกับที่ผู้ใช้เลือก: ดูจาก "token ที่เหลือ" (remaining %).
+Defaults are designed to be safe for the rate limit (poll every 180 s) and the colour thresholds
+follow the user's choice: based on "tokens remaining" (remaining %).
 """
 from __future__ import annotations
 
@@ -11,42 +11,42 @@ from typing import Any
 
 CONFIG_PATH = Path.home() / ".claude-usage-tray.json"
 
-# ค่าเริ่มต้น — ทุกค่าปรับได้ในไฟล์ config
+# Defaults — every value can be changed in the config file
 DEFAULTS: dict[str, Any] = {
-    # วินาทีต่อรอบ poll. อย่าต่ำกว่า 180 ไม่งั้นเสี่ยงโดน HTTP 429 จาก API
+    # Seconds per poll. Don't go below 180 or you risk HTTP 429 from the API
     "poll_seconds": 180,
-    # เกณฑ์สี วัดจาก "เปอร์เซ็นต์ที่เหลือ" (remaining = 100 - utilization)
-    #   remaining > green_above           -> เขียว
-    #   orange_at >= remaining > red_at    -> ส้ม
-    #   remaining <= red_at                -> แดง (กะพริบ)
-    "green_above": 50,   # เหลือมากกว่า 50% = เขียว
-    "orange_at": 50,     # เหลือ <= 50% = ส้ม
-    "red_at": 20,        # เหลือ <= 20% = แดง
-    # เด้ง Windows notification (balloon) เมื่อ "ข้ามเกณฑ์ลง" ครั้งแรก
+    # Colour thresholds, based on "percent remaining" (remaining = 100 - utilization)
+    #   remaining > green_above           -> green
+    #   orange_at >= remaining > red_at    -> orange
+    #   remaining <= red_at                -> red (blinking)
+    "green_above": 50,   # more than 50% left = green
+    "orange_at": 50,     # 50% or less left = orange
+    "red_at": 20,        # 20% or less left = red
+    # Show a Windows notification (balloon) the first time a threshold is crossed downward
     "notify": True,
-    # เด้ง popup หน้าต่างเตือน (ค้างหน้าจอ) ทันทีที่เหลือต่ำกว่า 50% และ 20%
+    # Show an alert popup (stays on screen) as soon as remaining drops below 50% and 20%
     "popup_alert": True,
-    # ให้ไอคอนแดงกะพริบเมื่อใกล้หมด
+    # Blink the red icon when nearly used up
     "blink_when_red": True,
-    # แสดงตัวเลข % ที่เหลือทับบนไอคอน (อ่านยากที่ 16px แต่ชัดที่ DPI สูง)
+    # Draw the remaining-% number over the icon (hard to read at 16px, clear at high DPI)
     "show_percent_text": True,
-    # นับ quota ไหนบ้างในการเลือกสี (ใช้ค่าที่แย่ที่สุด = เหลือน้อยสุด)
-    #   five_hour = หน้าต่าง 5 ชม., seven_day = เพดานรายสัปดาห์
+    # Which quotas count when choosing the colour (the worst one = least remaining)
+    #   five_hour = 5-hour window, seven_day = weekly cap
     "watch": ["five_hour", "seven_day"],
-    # widget ลอยหน้าจอ (ธีมสว่าง)
-    "widget_opacity": 0.94,     # ความโปร่งใส 0.5–1.0
-    "widget_on_start": False,   # เปิด widget อัตโนมัติเมื่อเริ่มโปรแกรม
+    # floating widget (light theme)
+    "widget_opacity": 0.94,     # opacity 0.5–1.0
+    "widget_on_start": False,   # open the widget automatically at startup
 }
 
 
 def load() -> dict[str, Any]:
-    """โหลด config รวมกับค่า default; เขียนไฟล์ตัวอย่างให้ถ้ายังไม่มี."""
+    """Load the config merged with defaults; write a sample file if none exists."""
     cfg = dict(DEFAULTS)
     if CONFIG_PATH.exists():
         try:
             cfg.update(json.loads(CONFIG_PATH.read_text(encoding="utf-8")))
         except (OSError, ValueError):
-            pass  # ไฟล์เสีย -> ใช้ค่า default เงียบ ๆ
+            pass  # corrupt file -> silently use the defaults
     else:
         save(cfg)
     return cfg

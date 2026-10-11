@@ -1,30 +1,30 @@
-"""แปลง usage response -> สถานะสี + ตัวเลขสรุปสำหรับ tooltip/popup."""
+"""Convert the usage response -> colour status + summary numbers for the tooltip/popup."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-# ระดับสถานะ เรียงจากดี -> แย่
+# Status levels, ordered good -> bad
 GREEN = "green"
 ORANGE = "orange"
 RED = "red"
 UNKNOWN = "unknown"
 
-# สี RGB สำหรับวาดไอคอน
+# RGB colours for drawing the icon
 COLORS = {
     GREEN: (34, 197, 94),    # #22C55E
     ORANGE: (245, 158, 11),  # #F59E0B
     RED: (239, 68, 68),      # #EF4444
-    UNKNOWN: (148, 163, 184),  # เทา #94A3B8
+    UNKNOWN: (148, 163, 184),  # grey #94A3B8
 }
 
-# ป้ายภาษาไทยของแต่ละ quota
+# Label for each quota
 LABELS = {
-    "five_hour": "5 ชั่วโมง",
-    "seven_day": "รายสัปดาห์",
-    "seven_day_opus": "Opus (สัปดาห์)",
-    "seven_day_sonnet": "Sonnet (สัปดาห์)",
+    "five_hour": "5 hours",
+    "seven_day": "Weekly",
+    "seven_day_opus": "Opus (weekly)",
+    "seven_day_sonnet": "Sonnet (weekly)",
 }
 
 
@@ -32,17 +32,17 @@ LABELS = {
 class Quota:
     key: str
     label: str
-    used_pct: float       # % ที่ใช้ไป (utilization)
-    remaining_pct: float  # % ที่เหลือ
+    used_pct: float       # % used (utilization)
+    remaining_pct: float  # % remaining
     resets_at: str | None
 
 
 @dataclass
 class Status:
     color: str                 # GREEN/ORANGE/RED/UNKNOWN
-    remaining_pct: float | None  # remaining ของ quota ที่แย่ที่สุด
-    driver: str | None         # key ของ quota ที่เป็นตัวกำหนดสี
-    quotas: list[Quota]        # ทุก quota ที่อ่านได้ (ไว้โชว์ใน popup)
+    remaining_pct: float | None  # remaining of the worst quota
+    driver: str | None         # key of the quota that determines the colour
+    quotas: list[Quota]        # every quota that could be read (shown in the popup)
     error: str | None = None
 
 
@@ -55,7 +55,7 @@ def _classify(remaining: float, cfg: dict[str, Any]) -> str:
 
 
 def evaluate(usage: dict[str, Any], cfg: dict[str, Any]) -> Status:
-    """คำนวณสถานะจาก response ของ fetch_usage()."""
+    """Compute the status from the fetch_usage() response."""
     if usage.get("error"):
         return Status(UNKNOWN, None, None, [], error=usage.get("message") or usage["error"])
 
@@ -65,7 +65,7 @@ def evaluate(usage: dict[str, Any], cfg: dict[str, Any]) -> Status:
             continue
         util = val.get("utilization")
         if util is None:
-            continue  # quota ที่ยังไม่เริ่มใช้ (เช่น seven_day_opus = null)
+            continue  # quota not started yet (e.g. seven_day_opus = null)
         used = float(util)
         quotas.append(
             Quota(
@@ -78,19 +78,19 @@ def evaluate(usage: dict[str, Any], cfg: dict[str, Any]) -> Status:
         )
 
     if not quotas:
-        return Status(UNKNOWN, None, None, [], error="ไม่มีข้อมูล quota")
+        return Status(UNKNOWN, None, None, [], error="No quota data")
 
-    # เลือกสีจาก quota ที่ผู้ใช้สั่งให้เฝ้า (watch) และเหลือน้อยที่สุด = แย่สุด
+    # pick the colour from the quota the user told us to watch (watch) with the least remaining = worst
     watched = [q for q in quotas if q.key in cfg["watch"]] or quotas
     worst = min(watched, key=lambda q: q.remaining_pct)
     color = _classify(worst.remaining_pct, cfg)
 
-    quotas.sort(key=lambda q: q.remaining_pct)  # แย่สุดขึ้นก่อนใน popup
+    quotas.sort(key=lambda q: q.remaining_pct)  # worst first in the popup
     return Status(color, worst.remaining_pct, worst.key, quotas)
 
 
 def humanize_reset(resets_at: str | None) -> str:
-    """แปลง ISO timestamp -> 'อีก 2ชม 14น' (โดยประมาณ)."""
+    """Convert an ISO timestamp -> 'in 2h 14m' (approximate)."""
     if not resets_at:
         return "-"
     try:
@@ -100,12 +100,12 @@ def humanize_reset(resets_at: str | None) -> str:
     delta = dt - datetime.now(timezone.utc)
     secs = int(delta.total_seconds())
     if secs <= 0:
-        return "เร็ว ๆ นี้"
+        return "soon"
     h, rem = divmod(secs, 3600)
     m = rem // 60
     if h >= 24:
         d, hh = divmod(h, 24)
-        return f"อีก {d}วัน {hh}ชม"
+        return f"in {d}d {hh}h"
     if h:
-        return f"อีก {h}ชม {m}น"
-    return f"อีก {m}น"
+        return f"in {h}h {m}m"
+    return f"in {m}m"
