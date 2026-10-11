@@ -69,16 +69,18 @@ def _compose(*names: str) -> Image.Image:
     return img
 
 
-@lru_cache(maxsize=1)
-def _crop_box() -> tuple[int, int, int, int]:
-    """Union bounding box of every pose, so the dog doesn't jump around between frames."""
-    boxes = []
-    for combo in (("standTail0",), ("standTail12",), ("bowTailUp",), ("bowTailOut",),
-                  ("sitTail30", "sitPawDown", "laptop", "glasses"),
-                  ("sitTail70", "sitPawUp", "laptop", "glasses")):
-        b = _compose(*combo).getbbox()
-        if b:
-            boxes.append(b)
+_POSE_COMBOS = {
+    "stand": (("standTail0",), ("standTail12",)),
+    "bow": (("bowTailUp",), ("bowTailOut",)),
+    "sit": (("sitTail30", "sitPawDown", "laptop", "glasses"),
+            ("sitTail70", "sitPawUp", "laptop", "glasses")),
+}
+
+
+@lru_cache(maxsize=None)
+def _crop_box(pose: str) -> tuple[int, int, int, int]:
+    """Union bounding box of one pose's frames: the dog fills the icon without jumping while animating."""
+    boxes = [b for combo in _POSE_COMBOS[pose] if (b := _compose(*combo).getbbox())]
     return (min(b[0] for b in boxes), min(b[1] for b in boxes),
             max(b[2] for b in boxes), max(b[3] for b in boxes))
 
@@ -140,7 +142,7 @@ def render(status: Status, tick: int, working: bool, dim: bool = False) -> Image
         for i, (x, y) in enumerate(screen):
             px[x, y] = _hex(_data()["palette"]["B" if (i + tick) % 3 else "Y"])
 
-    x0, y0, x1, y1 = _crop_box()
+    x0, y0, x1, y1 = _crop_box(pose)
     dog = frame.crop((x0, y0, x1, y1))
     w, h = dog.size
     bar_h, gap = 3, 2
@@ -162,10 +164,7 @@ def render(status: Status, tick: int, working: bool, dim: bool = False) -> Image
             for y in range(by, by + bar_h):
                 cpx[x, y] = color + (255,)
 
-    scale = max(1, _SIZE // side)
-    big = cell.resize((side * scale, side * scale), Image.NEAREST)
-    out = Image.new("RGBA", (_SIZE, _SIZE), (0, 0, 0, 0))
-    out.alpha_composite(big, ((_SIZE - big.width) // 2, (_SIZE - big.height) // 2))
+    out = cell.resize((_SIZE, _SIZE), Image.NEAREST)  # fractional scale: fill the whole icon
     if dim:
         out.putalpha(out.split()[3].point(lambda a: int(a * 0.35)))
     return out
