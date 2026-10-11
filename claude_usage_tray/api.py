@@ -26,6 +26,17 @@ CLAUDE_CONFIG_DIR = (
 )
 CLAUDE_CREDENTIALS = CLAUDE_CONFIG_DIR / ".credentials.json"
 
+
+def _credentials_path() -> Path:
+    """Default credentials file; if missing, fall back to the config's `claude_config_dir`
+    (e.g. a WSL path when Claude Code is logged in inside WSL)."""
+    default = CLAUDE_CONFIG_DIR / ".credentials.json"
+    if default.exists():
+        return default
+    from . import config
+    alt = config.load().get("claude_config_dir")
+    return Path(alt) / ".credentials.json" if alt else default
+
 # If the claude CLI version cannot be found, use this instead (a User-Agent claude-code/* is required
 # otherwise we land in a heavily rate-limited bucket and always get 429)
 _FALLBACK_UA = "claude-code/2.1.204"
@@ -34,10 +45,11 @@ _cached_ua: str | None = None
 
 def read_access_token() -> str | None:
     """Read the current accessToken from the credential file."""
-    if not CLAUDE_CREDENTIALS.exists():
+    cred = _credentials_path()
+    if not cred.exists():
         return None
     try:
-        creds = json.loads(CLAUDE_CREDENTIALS.read_text(encoding="utf-8"))
+        creds = json.loads(cred.read_text(encoding="utf-8"))
         return creds.get("claudeAiOauth", {}).get("accessToken") or None
     except (OSError, ValueError, KeyError):
         # OSError also covers a read colliding with Claude Code overwriting the file (token rotation)
@@ -46,10 +58,11 @@ def read_access_token() -> str | None:
 
 def read_plan() -> str | None:
     """Read the plan name for the badge (e.g. 'Max (20×)' / 'Pro') from the credential."""
-    if not CLAUDE_CREDENTIALS.exists():
+    cred = _credentials_path()
+    if not cred.exists():
         return None
     try:
-        o = json.loads(CLAUDE_CREDENTIALS.read_text(encoding="utf-8")).get("claudeAiOauth", {})
+        o = json.loads(cred.read_text(encoding="utf-8")).get("claudeAiOauth", {})
     except (OSError, ValueError):
         return None
     sub = o.get("subscriptionType")
