@@ -15,7 +15,7 @@ from typing import Any, Callable
 
 import time
 
-from . import __version__, api, config as config_mod, dashboard, icon as icon_mod, widget as widget_mod
+from . import __version__, api, config as config_mod, dashboard, icon as icon_mod, kenji as kenji_mod, scene as scene_mod, widget as widget_mod
 from .status import COLORS, GREEN, ORANGE, RED, Status, humanize_reset
 
 GITHUB_URL = "https://github.com/ksmaster03/claude-usage-tray"
@@ -425,7 +425,8 @@ def _widget_window(get_status, cfg, on_refresh) -> None:
 
         widget_mod._cache["_pinned"] = True
         root.attributes("-topmost", True)
-        st = {"photo": None, "regions": {}, "press": None}
+        st = {"photo": None, "regions": {}, "press": None, "base": None,
+              "last_work": time.time(), "t0": time.time()}
         lbl = tk.Label(root, bd=0, bg="#fafafc")
         lbl.pack()
 
@@ -433,9 +434,27 @@ def _widget_window(get_status, cfg, on_refresh) -> None:
             s = get_status()
             plan = api.read_plan()
             pil, regions = widget_mod.render(s, cfg, plan, time.strftime("%H:%M"))
-            st["photo"] = _pil_photo(pil)
+            st["base"] = pil
             st["regions"] = regions
-            lbl.config(image=st["photo"])
+            animate(first=True)
+
+        def animate(first=False):
+            """Bigotes scene: repaint only the animated strip over the cached card, ~5 fps."""
+            if not root.winfo_exists():
+                return
+            base = st["base"]
+            if base is not None:
+                now = time.time()
+                working = kenji_mod.is_working()
+                if working:
+                    st["last_work"] = now
+                scn, _mode = scene_mod.render(get_status(), working, now - st["last_work"], now - st["t0"])
+                frame = base.copy()
+                frame.alpha_composite(scn, (widget_mod.SCENE_X, widget_mod.SCENE_Y))
+                st["photo"] = _pil_photo(frame)
+                lbl.config(image=st["photo"])
+            if not first:
+                root.after(200, animate)
 
         def hit(x, y):
             r = st["regions"]
@@ -477,6 +496,7 @@ def _widget_window(get_status, cfg, on_refresh) -> None:
         root.bind("<Escape>", lambda _e: root.destroy())
 
         redraw()
+        root.after(200, animate)
         root.after(3000, tick)
         root.mainloop()
     finally:

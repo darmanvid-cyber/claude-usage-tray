@@ -43,7 +43,7 @@ class TrayApp:
             pystray.MenuItem("Show details…", self._on_details, default=True),
             pystray.MenuItem("Floating widget", self._on_widget),
             pystray.MenuItem(
-                "Kenji icon",
+                "Bigotes icon",
                 self._on_toggle_kenji,
                 checked=lambda _: self.cfg.get("icon_style", "kenji") == "kenji",
             ),

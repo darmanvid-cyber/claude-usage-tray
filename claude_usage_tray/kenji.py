@@ -1,4 +1,4 @@
-"""Kenji — animated pixel-art golden retriever used as the tray icon.
+"""Bigotes — animated pixel-art golden retriever used as the tray icon.
 
 Poses: standing + tail wag (idle), sitting at a laptop with glasses (Claude Code working),
 play-bow (quota red). A bar under the dog shows the remaining quota in the status colour.
@@ -33,7 +33,7 @@ def _sprite_path() -> Path:
 # Coat colour overrides on top of the sprite palette (G=main fur, D=shade/ears, L=light, M=mid)
 COATS: dict[str, dict[str, list[int]]] = {
     "golden": {},
-    "beagle": {"G": [238, 206, 120], "D": [190, 140, 64], "L": [255, 248, 232], "M": [248, 232, 190]},
+    "beagle": {"G": [252, 247, 236], "D": [226, 180, 92], "L": [255, 255, 255], "M": [246, 226, 168]},
 }
 
 
@@ -92,8 +92,20 @@ def is_working() -> bool:
     if now - _scan_cache[0] < _SCAN_EVERY:
         return _scan_cache[1]
     working = False
+    roots = [_PROJECTS]
+    cdir = config.load().get("claude_config_dir")   # e.g. the WSL ~/.claude when logged in there
+    if cdir:
+        roots.append(Path(cdir) / "projects")
+    for root in roots:
+        working = working or _scan(root, now)
+    _scan_cache = (now, working)
+    return working
+
+
+def _scan(root: Path, now: float) -> bool:
+    working = False
     try:
-        for proj in _PROJECTS.iterdir():
+        for proj in root.iterdir():
             if not proj.is_dir():
                 continue
             for f in proj.glob("*.jsonl"):
@@ -104,7 +116,6 @@ def is_working() -> bool:
                 break
     except OSError:
         pass
-    _scan_cache = (now, working)
     return working
 
 

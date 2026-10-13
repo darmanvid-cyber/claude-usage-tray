@@ -29,7 +29,7 @@ if os.path.isdir(FONTS):
     ARGS += ["--add-data", f"{FONTS}{os.pathsep}assets/fonts"]  # bundle the widget fonts
 SPRITE = os.path.join(HERE, "assets", "kenji-sprite.json")
 if os.path.exists(SPRITE):
-    ARGS += ["--add-data", f"{SPRITE}{os.pathsep}assets"]  # Kenji sprite
+    ARGS += ["--add-data", f"{SPRITE}{os.pathsep}assets"]  # Bigotes sprite
 ARGS.append(os.path.join(HERE, "app.py"))
 
 if __name__ == "__main__":

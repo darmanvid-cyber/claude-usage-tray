@@ -13,9 +13,11 @@ from typing import Any
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from . import icon as icon_mod
+from . import scene as scene_mod
 from .status import COLORS, GREEN, ORANGE, RED, Status, humanize_reset
 
-W, H = 320, 224
+SCENE_X, SCENE_Y = 14, 48
+W, H = 320, 224 + scene_mod.H + 6
 SS = 2
 
 # ---- light palette ----
@@ -103,7 +105,8 @@ def _pill(d, box, r, fill):
     d.rounded_rectangle(box, radius=r, fill=fill)
 
 
-def render(status: Status, cfg: dict, plan: str | None, updated: str) -> tuple[Image.Image, dict]:
+def render(status: Status, cfg: dict, plan: str | None, updated: str,
+           scene_img: Image.Image | None = None) -> tuple[Image.Image, dict]:
     S = SS
     img = Image.new("RGBA", (W * S, H * S), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -143,7 +146,7 @@ def render(status: Status, cfg: dict, plan: str | None, updated: str) -> tuple[I
 
     # ----- sections (usage bars) -----
     quotas = [q for q in status.quotas if q.key in ("five_hour", "seven_day")][:2] or status.quotas[:2]
-    y = 58
+    y = 58 + scene_mod.H + 6
     for q in quotas:
         col = COLORS[_classify(q.remaining_pct, cfg)]
         label = LABELS.get(q.key, q.label)
@@ -183,4 +186,7 @@ def render(status: Status, cfg: dict, plan: str | None, updated: str) -> tuple[I
     if status.error:
         _rt(d, (W / 2) * S, (H - 4) * S, status.error, _sarabun(10 * S), COLORS[ORANGE], anchor="mm")
 
-    return img.resize((W, H), Image.LANCZOS), regions
+    out = img.resize((W, H), Image.LANCZOS)
+    if scene_img is not None:
+        out.alpha_composite(scene_img, (SCENE_X, SCENE_Y))
+    return out, regions

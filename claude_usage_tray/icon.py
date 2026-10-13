@@ -123,5 +123,5 @@ def render(status: Status, cfg: dict, dim: bool = False, tick: int = 0, working:
 
 def should_blink(status: Status, cfg: dict) -> bool:
     if cfg.get("icon_style", "kenji") == "kenji":
-        return False  # Kenji bows instead of blinking
+        return False  # Bigotes bows instead of blinking
     return bool(cfg.get("blink_when_red")) and status.color == RED
