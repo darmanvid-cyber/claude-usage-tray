@@ -13,6 +13,8 @@ import tkinter as tk
 import webbrowser
 from typing import Any, Callable
 
+from PIL import Image
+
 import time
 
 from . import __version__, api, config as config_mod, dashboard, icon as icon_mod, kenji as kenji_mod, scene as scene_mod, widget as widget_mod
@@ -128,6 +130,7 @@ def _dashboard_window(get_status, cfg, on_refresh) -> None:
             lbl.config(image=st["photo"])
 
         def hit(x, y):
+            x, y = x / k, y / k
             r = st["regions"]
             if _in_rect(x, y, r.get("close", (0, 0, 0, 0))):
                 root.destroy(); return
@@ -417,9 +420,11 @@ def _widget_window(get_status, cfg, on_refresh) -> None:
             pass
         # place bottom-right, above the system tray
         root.update_idletasks()
-        x = root.winfo_screenwidth() - widget_mod.W - 24
-        y = root.winfo_screenheight() - widget_mod.H - 64
-        root.geometry(f"{widget_mod.W}x{widget_mod.H}+{x}+{y}")
+        k = min(1.0, max(0.3, float(cfg.get("widget_scale", 0.7))))
+        ww, wh = round(widget_mod.W * k), round(widget_mod.H * k)
+        x = root.winfo_screenwidth() - ww - 24
+        y = root.winfo_screenheight() - wh - 64
+        root.geometry(f"{ww}x{wh}+{x}+{y}")
         # set the position again after map (overrideredirect sometimes ignores +x+y at first)
         root.after(40, lambda: root.geometry(f"+{x}+{y}"))
 
@@ -451,6 +456,8 @@ def _widget_window(get_status, cfg, on_refresh) -> None:
                 scn, _mode = scene_mod.render(get_status(), working, now - st["last_work"], now - st["t0"])
                 frame = base.copy()
                 frame.alpha_composite(scn, (widget_mod.SCENE_X, widget_mod.SCENE_Y))
+                if k != 1.0:
+                    frame = frame.resize((ww, wh), Image.LANCZOS)
                 st["photo"] = _pil_photo(frame)
                 lbl.config(image=st["photo"])
             if not first:

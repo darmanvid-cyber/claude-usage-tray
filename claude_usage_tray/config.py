@@ -39,6 +39,7 @@ DEFAULTS: dict[str, Any] = {
     "kenji_coat": "beagle",
     # floating widget (light theme)
     "widget_opacity": 0.94,     # opacity 0.5–1.0
+    "widget_scale": 0.7,        # widget size factor (0.7 = 30% smaller)
     "widget_on_start": False,   # open the widget automatically at startup
 }
 
